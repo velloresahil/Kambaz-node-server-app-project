@@ -12,15 +12,29 @@ import EnrollmentRoutes from "./Kambaz/Enrollments/routes.js";
 import QuizzesRoutes from "./Kambaz/Quizzes/routes.js";
 
 const app = express();
+
+
+const allowedOrigin = process.env.NETLIFY_URL || "http://localhost:5173";
+
 app.use(cors({
     credentials: true,
-    origin: process.env.NETLIFY_URL || "http://localhost:5173",
+    origin: function (origin, callback) {
+        if (!origin) return callback(null, true);  
+        if (origin.startsWith(allowedOrigin)) {
+            return callback(null, true);  
+        } else {
+            return callback(new Error('Not allowed by CORS'));
+        }
+    }
 }));
+
+
 const sessionOptions = {
     secret: process.env.SESSION_SECRET || "kambaz",
     resave: false,
     saveUninitialized: false,
 };
+
 if (process.env.NODE_ENV !== "development") {
     sessionOptions.proxy = true;
     sessionOptions.cookie = {
@@ -29,10 +43,10 @@ if (process.env.NODE_ENV !== "development") {
         domain: process.env.NODE_SERVER_DOMAIN,
     };
 }
-app.use(
-    session(sessionOptions)
-);
+
+app.use(session(sessionOptions));
 app.use(express.json());
+
 Hello(app);
 UserRoutes(app);
 CourseRoutes(app);
@@ -41,4 +55,5 @@ AssignmentRoutes(app);
 EnrollmentRoutes(app);
 QuizzesRoutes(app);
 Lab5(app);
-app.listen(process.env.PORT || 4000)
+
+app.listen(process.env.PORT || 4000);
