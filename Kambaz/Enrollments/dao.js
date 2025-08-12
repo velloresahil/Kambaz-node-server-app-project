@@ -1,4 +1,4 @@
-// Kambaz/Enrollments/dao.js
+
 import Database from "../Database/index.js";
 import { v4 as uuidv4 } from "uuid";
 
@@ -16,7 +16,7 @@ export function unEnrollUserInCourse(userId, courseId) {
   );
 }
 
-// UPDATED: helper used by GET /api/users/current/courses
+
 export function findCoursesForUser(userId) {
   const { enrollments, courses } = Database;
   const courseIds = enrollments
