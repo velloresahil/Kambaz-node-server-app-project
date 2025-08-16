@@ -1,104 +1,137 @@
-import Database from "../Database/index.js";
-import {v4 as uuidv4} from "uuid";
+import model from "./model.js";   
+import { v4 as uuidv4 } from "uuid";
 
-export function createQuiz(quiz) {
-    const newQuiz = { ...quiz, quizId: uuidv4() }
-    Database.quizzes = [...Database.quizzes, newQuiz]
-    return newQuiz
-}
+// ✅ Create a new quiz for a course
+export const createQuiz = async (courseId) => {
+  const doc = await model.create({
+    courseId,
+    quizId: uuidv4(),
+    published: false,
+    details: {
+      title: "New Quiz",
+      description: "",
+      points: 0,
+      quizType: "Graded Quiz",
+      assignmentGroup: "Quizzes",
+      shuffleAnswers: false,
+      timeLimit: 20,
+      multipleAttempts: false,
+      maxAttempts: 1,
+      showCorrectAnswers: true,
+      accessCode: "",
+      oneQuestionAtATime: true,
+      webcamRequired: false,
+      lockAfterAnswering: false,
+      dates: { availableFrom: null, availableUntil: null, dueDate: null }
+    },
+    questions: [],
+    attempts: []
+  });
+  return doc;
+};
 
-export function getQuizzesByCourse(courseId) {
-    const { quizzes } = Database;
-    return quizzes
-        .filter((quiz) => quiz.courseId === courseId)
-        .map((quiz) => ({
-            quizId: quiz.quizId,
-            title: quiz.details.title,
-            dates: quiz.details.dates,
-            points: quiz.questions.reduce((total, question) => total + question.points, 0),
-            noOfQuestions: quiz.questions.length
-        }));
-}
+// ✅ Get all quizzes for a course
+export const getQuizzesByCourse = (courseId) => {
+  return model.find({ courseId }).lean();
+};
 
-export function getQuizById(quizId, role) {
-    const { quizzes } = Database;
-    const quiz = quizzes.find((quiz) => quiz.quizId === quizId);
+// ✅ Get a quiz by ID
+export const getQuizById = (quizId) => {
+  return model.findOne({ quizId }).lean();
+};
 
-    if (!quiz) {
-        return null;
-    }
-    const questionsWithConditionalAnswers = quiz.questions.map((question) => {
-        return {
-            questionId: question.questionId,
-            questionTitle: question.questionTitle,
-            questionDescription: question.questionDescription,
-            questionType: question.questionType,
-            possibleAnswers: question.possibleAnswers,
-            points: question.points,
-            correctAnswers: role === "FACULTY" ? question.correctAnswers : null
-        };
-    });
+// ✅ Update quiz details (merge into details)
+export const updateQuiz = async (quizId, updates) => {
+  const quiz = await model.findOne({ quizId });
+  if (!quiz) return null;
 
-    return {
-        courseId: quiz.courseId,
-        quizId: quiz.quizId,
-        details: quiz.details,
-        questions: questionsWithConditionalAnswers
-    };
-}
+  quiz.details = { ...quiz.details.toObject?.() ?? quiz.details, ...updates };
 
-export function deleteQuizById(quizId) {
-    const { quizzes } = Database;
-    Database.quizzes = quizzes.filter((quiz) => quiz.quizId !== quizId);
-}
+  if (quiz.questions?.length) {
+    quiz.details.points = quiz.questions.reduce((s, q) => s + (q.points || 0), 0);
+  }
+  await quiz.save();
+  return quiz.toObject();
+};
 
+// ✅ Delete a quiz
+export const deleteQuiz = async (quizId) => {
+  const deleted = await model.findOneAndDelete({ quizId }).lean();
+  return deleted;
+};
 
-export function updateQuiz(quiz, courseId) {
+// ✅ Publish/Unpublish a quiz
+export const setPublishStatus = (quizId, status) => {
+  return model.findOneAndUpdate(
+    { quizId },
+    { $set: { published: status } },
+    { new: true }
+  ).lean();
+};
 
-    let { quizzes } = Database;
-    //create a new quiz
-    if ( quiz.quizId === null || quiz.quizId === undefined) {
-        const newQuiz = {
-            courseId: courseId,
-            quizId: uuidv4(),
-            details: quiz.quizDetails,
-            questions: quiz.questions.newQuestions
-        }
-        Database.quizzes = [...quizzes, newQuiz];
-        return newQuiz;
-    }
+// ✅ Add a question
+export const addQuestion = async (quizId, question) => {
+  const payload = { ...question, questionId: uuidv4() };
+  const quiz = await model.findOneAndUpdate(
+    { quizId },
+    { $push: { questions: payload } },
+    { new: true }
+  );
+  if (!quiz) return null;
 
-    //updating an existing quiz
-    else {
-        const existingQuiz = quizzes.find((q)=>(q.quizId === quiz.quizId && q.courseId === courseId));
-        quizzes = quizzes.filter((q)=> q.quizId !== quiz.quizId);
+  quiz.details.points = quiz.questions.reduce((s, q) => s + (q.points || 0), 0);
+  await quiz.save();
 
-        existingQuiz.details = quiz.quizDetails;
+  return payload;
+};
 
-        if(quiz.questions.deleteQuestionsIds !== null) {
-            existingQuiz.questions = existingQuiz.questions.filter((q) => {
-                return !quiz.questions.deleteQuestionsIds.includes(q.questionId);
-            });
-        }
+// ✅ Update a question
+export const updateQuestion = async (quizId, questionId, updates) => {
+  const quiz = await model.findOne({ quizId });
+  if (!quiz) return null;
 
-        if(quiz.questions.updatedQuestions !== null) {
-            const questionsMap = new Map();
+  const q = quiz.questions.find((qq) => qq.questionId === questionId);
+  if (!q) return null;
 
-            for (const question of quiz.questions.updatedQuestions) {
-                if (question.questionId) {
-                    questionsMap.set(question.questionId, question);
-                }
-            }
+  Object.assign(q, updates);
+  quiz.details.points = quiz.questions.reduce((s, qq) => s + (qq.points || 0), 0);
+  await quiz.save();
 
-            existingQuiz.questions = existingQuiz.questions.map((q) => questionsMap.has(q.questionId) ? questionsMap.get(q.questionId) : q);
-        }
+  return q.toObject ? q.toObject() : q;
+};
 
+// ✅ Delete a question
+export const deleteQuestion = async (quizId, questionId) => {
+  const quiz = await model.findOne({ quizId });
+  if (!quiz) return null;
 
-        if(quiz.questions.newQuestions !== null) {
-            existingQuiz.questions = [...existingQuiz.questions, ...quiz.questions.newQuestions]
-        }
+  quiz.questions = quiz.questions.filter((q) => q.questionId !== questionId);
+  quiz.details.points = quiz.questions.reduce((s, q) => s + (q.points || 0), 0);
+  await quiz.save();
 
-        Database.quizzes = [...quizzes, existingQuiz];
-        return existingQuiz;
-    }
-}
+  return quiz.toObject();
+};
+
+// ✅ Record a student attempt
+export const recordAttempt = async (quizId, studentId, answers, score) => {
+  const quiz = await model.findOne({ quizId });
+  if (!quiz) return null;
+
+  quiz.attempts.push({
+    attemptId: uuidv4(),
+    studentId,
+    answers,
+    score,
+    timestamp: new Date()
+  });
+  await quiz.save();
+
+  return quiz.toObject();
+};
+
+// ✅ Get attempts for a student
+export const getAttemptsByStudent = async (quizId, studentId) => {
+  const quiz = await model.findOne({ quizId }).lean();
+  if (!quiz) return null;
+  return quiz.attempts.filter((a) => a.studentId === studentId);
+};
