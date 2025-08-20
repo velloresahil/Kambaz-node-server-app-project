@@ -1,4 +1,5 @@
 import * as dao from "./dao.js";
+import * as qdao from "../QuestionsTab/dao.js";
 
 export default function QuizRoutes(app) {
     app.get("/api/courses/:cid/quizzes", async (req, res) => {
@@ -32,6 +33,7 @@ export default function QuizRoutes(app) {
     app.delete("/api/quizzes/:qid", async (req, res) => {
         const { qid } = req.params;
         await dao.deleteQuiz(qid);
+        await qdao.deleteQuestionsByQuiz(qid);
         res.sendStatus(200);
     });
 }

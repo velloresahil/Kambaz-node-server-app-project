@@ -21,3 +21,7 @@ export async function updateQuestion(questid, updates) {
 export async function deleteQuestion(questid) {
     return await model.findByIdAndDelete(questid);
 }
+
+export async function deleteQuestionsByQuiz(quizId) {
+  return await model.deleteMany({ quiz: quizId });
+}

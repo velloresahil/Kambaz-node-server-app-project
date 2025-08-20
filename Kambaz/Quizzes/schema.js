@@ -26,7 +26,7 @@ const quizSchema = new mongoose.Schema(
         },
         timeLimit: {
             type: Number,
-            default: 20, // in minutes
+            default: 20, 
         },
         multipleAttempts: {
             type: Boolean,
